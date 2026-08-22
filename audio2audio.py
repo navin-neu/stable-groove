@@ -9,10 +9,10 @@ Example:
 
 import argparse
 
+import torch
 import torch.nn.functional as F
-import torchaudio
+import soundfile as sf
 from stable_audio_3 import StableAudioModel
-
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Stable Audio 3 Small-SFX audio-to-audio")
@@ -26,7 +26,7 @@ def main() -> None:
     ap.add_argument("--cfg-scale", type=float, default=1.0, help="CFG scale (default 1.0)")
     ap.add_argument("--seed", type=int, default=-1, help="Random seed (-1 = random)")
     ap.add_argument("--normalize", action="store_true", help="Peak-normalize output to prevent clipping")
-    ap.add_argument("--device", default=None, help="cpu / mps / cuda (auto if omitted)")
+    ap.add_argument("--device", default="cpu", choices=["cpu", "cuda"], help="Device to use: cpu (default) or cuda")
     ap.add_argument("--max-tail", type=float, default=2.0, help="Maximum extra tail seconds (default 2.0)")
     ap.add_argument("--tail-silence", type=float, default=0.1, help="Silence that ends a tail (default 0.1s)")
     args = ap.parse_args()
@@ -34,12 +34,25 @@ def main() -> None:
     if args.max_tail < 0 or args.tail_silence < 0:
         ap.error("--max-tail and --tail-silence must be non-negative")
 
-    waveform, sr = torchaudio.load(args.input)
+    audio_data, sr = sf.read(args.input, always_2d=True)
+
+    waveform = torch.from_numpy(audio_data.T).float()
     duration = args.duration if args.duration is not None else waveform.shape[-1] / sr
     generation_duration = max(duration, 5.0)
 
+    # Make sure CUDA is actually available if the user requested it.
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA was requested, but PyTorch cannot see a CUDA-capable GPU."
+        )
+
+    print(f"Using device: {args.device}")
     print("Loading small-sfx...")
-    model = StableAudioModel.from_pretrained("small-sfx", device=args.device)
+
+    model = StableAudioModel.from_pretrained(
+        "small-sfx",
+        device=args.device,
+    )
 
     if generation_duration != duration:
         print(
@@ -105,7 +118,11 @@ def main() -> None:
         if peak > 0:
             out = out / peak
 
-    torchaudio.save(args.output, out, model.model.sample_rate)
+    sf.write(
+        args.output,
+        out.cpu().numpy().T,
+        model.model.sample_rate,
+    )
     print(f"Saved: {args.output}")
 
 

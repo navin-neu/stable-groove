@@ -1,0 +1,1 @@
+uv venv .venv --python 3.11; uv pip install --python .venv\Scripts\python.exe "git+https://github.com/Stability-AI/stable-audio-3.git"; uv pip install --python .venv\Scripts\python.exe --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126; uv pip install --python .venv\Scripts\python.exe soundfile
