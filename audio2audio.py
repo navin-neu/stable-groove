@@ -9,6 +9,7 @@ Example:
 
 import argparse
 
+import torch.nn.functional as F
 import torchaudio
 from stable_audio_3 import StableAudioModel
 
@@ -26,18 +27,29 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=-1, help="Random seed (-1 = random)")
     ap.add_argument("--normalize", action="store_true", help="Peak-normalize output to prevent clipping")
     ap.add_argument("--device", default=None, help="cpu / mps / cuda (auto if omitted)")
+    ap.add_argument("--max-tail", type=float, default=2.0, help="Maximum extra tail seconds (default 2.0)")
+    ap.add_argument("--tail-silence", type=float, default=0.1, help="Silence that ends a tail (default 0.1s)")
     args = ap.parse_args()
+
+    if args.max_tail < 0 or args.tail_silence < 0:
+        ap.error("--max-tail and --tail-silence must be non-negative")
 
     waveform, sr = torchaudio.load(args.input)
     duration = args.duration if args.duration is not None else waveform.shape[-1] / sr
+    generation_duration = max(duration, 5.0)
 
     print("Loading small-sfx...")
     model = StableAudioModel.from_pretrained("small-sfx", device=args.device)
 
+    if generation_duration != duration:
+        print(
+            f"Using {generation_duration:.1f}s generation context for the "
+            f"{duration:.2f}s source to avoid short-clip instability."
+        )
     print(f"Modifying '{args.input}' -> '{args.output}' (noise={args.noise}, {duration:.2f}s)")
     audio = model.generate(
         prompt=args.prompt,
-        duration=duration,
+        duration=generation_duration,
         steps=args.steps,
         cfg_scale=args.cfg_scale,
         seed=args.seed,
@@ -46,7 +58,48 @@ def main() -> None:
         init_noise_level=args.noise,
     )
 
-    out = audio[0].cpu()
+    generated = audio[0].cpu()
+    output_samples = round(duration * model.model.sample_rate)
+    if generated.shape[-1] > output_samples:
+        window_stride = max(1, min(output_samples // 20, model.model.sample_rate // 100))
+        energy = generated.square().mean(dim=0, keepdim=True).unsqueeze(0)
+        window_energy = F.avg_pool1d(energy, output_samples, stride=window_stride)
+        window_start = window_energy.argmax().item() * window_stride
+        window_end = window_start + output_samples
+
+        frame_samples = max(1, model.model.sample_rate // 100)
+        silence_samples = round(args.tail_silence * model.model.sample_rate)
+        tail_limit = min(
+            generated.shape[-1],
+            window_end + round(args.max_tail * model.model.sample_rate),
+        )
+        reference_rms = generated[:, window_start:window_end].square().mean().sqrt().item()
+        silence_threshold = max(reference_rms * 0.01, 1e-4)
+        tail_end = window_end
+        silent_run = 0
+        for frame_start in range(window_end, tail_limit, frame_samples):
+            frame_end = min(frame_start + frame_samples, tail_limit)
+            frame_rms = generated[:, frame_start:frame_end].square().mean().sqrt().item()
+            if frame_rms >= silence_threshold:
+                tail_end = frame_end
+                silent_run = 0
+            else:
+                silent_run += frame_end - frame_start
+                if silent_run >= silence_samples:
+                    break
+
+        if tail_end > window_end:
+            tail_end = min(tail_end + silence_samples, tail_limit)
+        out = generated[:, window_start:tail_end]
+        print(f"Selected generated audio at {window_start / model.model.sample_rate:.2f}s.")
+        if tail_end > window_end:
+            tail_duration = (tail_end - window_end) / model.model.sample_rate
+            print(f"Retained {tail_duration:.2f}s of generated tail.")
+    else:
+        out = generated[:, :output_samples]
+    clipped = (out.abs() >= 0.999).float().mean().item()
+    if clipped > 0.01:
+        print(f"Warning: {clipped:.1%} of output samples are clipped; try a lower --noise value.")
     if args.normalize:
         peak = out.abs().max()
         if peak > 0:
