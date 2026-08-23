@@ -13,3 +13,4 @@ Lets groove in a stable fashion
 - Audition new sample in-context in separate output before committing to sample swap
 - more traditional sample slicing, mangling, pitch control
 - support for melodic elements: stabs etc
+- add windowing to modify slices of a longer sample

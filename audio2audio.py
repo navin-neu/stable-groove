@@ -211,10 +211,10 @@ def main() -> None:
                     generate_audio(model=model, input_path=input_path, prompt=prompt, output_path=output_path, noise=noise, duration=args.duration, steps=args.steps, cfg_scale=args.cfg_scale, seed=args.seed, normalize=args.normalize, max_tail=args.max_tail, tail_silence=args.tail_silence)
 
                 if track is not None:
-                    output_filename = Path(output_path).name
-                    ready_message = oscbuildparse.OSCMessage("/ready", None, [track, output_filename])
+                    output_file_path = Path(output_path).resolve().as_posix()
+                    ready_message = oscbuildparse.OSCMessage("/ready", None, [track, output_file_path])
                     osc_send(ready_message, "ready_client")
-                    print(f"Sent OSC: /ready {track} {output_filename}")
+                    print(f"Sent OSC: /ready {track} {output_file_path}")
             except Exception as e:
                 print()
                 print(f"Generation failed: {e}")
