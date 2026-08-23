@@ -176,14 +176,11 @@ def main() -> None:
             queue_generation(str(input_path), str(prompt), float(noise), f"OSC Track {track}")
         return osc_generate_handler
 
-    osc_startup()
+    osc_startup(execthreadscount=0, writethreadscount=0)
     osc_udp_server("0.0.0.0", args.osc_port, "generate_server")
     for track in range(4):
         osc_method(f"/generate/{track}", make_osc_handler(track))
         
-    osc_thread = threading.Thread(target=osc_process, daemon=True)
-    osc_thread.start()
-
     print(f"OSC listening on 0.0.0.0:{args.osc_port}")
     print("OSC endpoint: /generate")
     print()
@@ -263,7 +260,6 @@ def main() -> None:
 
     finally:
         osc_terminate()
-        osc_thread.join(timeout=1.0)
         job_queue.put(None)
         worker.join()
 
