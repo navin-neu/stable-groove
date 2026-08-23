@@ -13,6 +13,17 @@
         "boxes": [
             {
                 "box": {
+                    "id": "obj-162",
+                    "linecount": 5,
+                    "maxclass": "comment",
+                    "numinlets": 1,
+                    "numoutlets": 0,
+                    "patching_rect": [ 1498.4616813659668, 1178.4616508483887, 150.0, 89.0 ],
+                    "text": "TO DO:\n\nTrim starting silence\nswap at measure sync\nusable UI in max\n"
+                }
+            },
+            {
+                "box": {
                     "id": "obj-161",
                     "maxclass": "newobj",
                     "numinlets": 1,
@@ -277,13 +288,13 @@
             {
                 "box": {
                     "id": "obj-227",
-                    "linecount": 15,
+                    "linecount": 18,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 1112.1951484680176, 129.2682957649231, 50.0, 215.0 ],
-                    "text": "/generate/3 \"bland closed hat\" C:/Users/navin/Documents/dev/stable-groove/output/out_022.wav 1."
+                    "patching_rect": [ 1112.1951484680176, 129.2682957649231, 50.0, 257.0 ],
+                    "text": "/generate/3 \"bland closed hat\" \"C:/Users/navin/Documents/dev/stable-groove/Drum One Shots/HiHat02.wav\" 1."
                 }
             },
             {
@@ -378,13 +389,13 @@
             {
                 "box": {
                     "id": "obj-219",
-                    "linecount": 14,
+                    "linecount": 16,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 837.8048980236053, 141.46341800689697, 50.0, 202.0 ],
-                    "text": "/generate/2 \"bland hi hat\" C:/Users/navin/Documents/dev/stable-groove/output/out_021.wav 1."
+                    "patching_rect": [ 837.8048980236053, 141.46341800689697, 50.0, 229.0 ],
+                    "text": "/generate/2 \"open shimmer hat\" C:/Users/navin/Documents/dev/stable-groove/output/out_032.wav 0.488189"
                 }
             },
             {
@@ -479,13 +490,13 @@
             {
                 "box": {
                     "id": "obj-211",
-                    "linecount": 18,
+                    "linecount": 14,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 564.6341598033905, 156.09756469726562, 51.0, 257.0 ],
-                    "text": "/generate/1 \"bland snare transient immediate\" C:/Users/navin/Documents/dev/stable-groove/output/out_028.wav 1."
+                    "patching_rect": [ 564.6341598033905, 156.09756469726562, 51.0, 202.0 ],
+                    "text": "/generate/1 \"snare roll\" C:/Users/navin/Documents/dev/stable-groove/output/out_035.wav 1."
                 }
             },
             {
@@ -580,13 +591,13 @@
             {
                 "box": {
                     "id": "obj-209",
-                    "linecount": 18,
+                    "linecount": 19,
                     "maxclass": "message",
                     "numinlets": 2,
                     "numoutlets": 1,
                     "outlettype": [ "" ],
-                    "patching_rect": [ 296.3414704799652, 145.12195467948914, 50.0, 257.0 ],
-                    "text": "/generate/0 \"bland kick transient immediate\" C:/Users/navin/Documents/dev/stable-groove/output/out_026.wav 1."
+                    "patching_rect": [ 296.3414704799652, 145.12195467948914, 50.0, 271.0 ],
+                    "text": "/generate/0 \"bland kick immediate transient\" C:/Users/navin/Documents/dev/stable-groove/output/out_039.wav 0.472441"
                 }
             },
             {
