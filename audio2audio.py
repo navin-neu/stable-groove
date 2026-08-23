@@ -9,6 +9,7 @@ import soundfile as sf
 from stable_audio_3 import StableAudioModel
 
 from osc4py3.as_allthreads import *
+from osc4py3 import oscbuildparse
 from osc4py3 import oscmethod as osm
 
 
@@ -101,14 +102,16 @@ def main() -> None:
     ap.add_argument("--max-tail", type=float, default=2.0, help="Maximum extra tail seconds")
     ap.add_argument("--tail-silence", type=float, default=0.1, help="Silence that ends a tail")
     ap.add_argument("--osc-port", type=int, default=9000, help="UDP port for OSC /generate messages (default 9000)")
+    ap.add_argument("--osc-reply-host", default="127.0.0.1", help="Host for OSC /ready messages (default 127.0.0.1)")
+    ap.add_argument("--osc-reply-port", type=int, default=9001, help="UDP port for OSC /ready messages (default 9001)")
 
     args = ap.parse_args()
 
     if args.max_tail < 0 or args.tail_silence < 0:
         ap.error("--max-tail and --tail-silence must be non-negative")
 
-    if args.osc_port < 1 or args.osc_port > 65535:
-        ap.error("--osc-port must be between 1 and 65535")
+    if not 1 <= args.osc_port <= 65535 or not 1 <= args.osc_reply_port <= 65535:
+        ap.error("OSC ports must be between 1 and 65535")
 
     if args.device == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested, but PyTorch cannot see a CUDA-capable GPU.")
@@ -128,13 +131,16 @@ def main() -> None:
     def get_next_output_path(input_path: str) -> str:
         nonlocal sample_number
 
+        output_dir = Path("output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         with sample_number_lock:
-            output_path = Path(input_path).parent / f"out_{sample_number:03d}.wav"
+            output_path = output_dir / f"out_{sample_number:03d}.wav"
             sample_number += 1
 
         return str(output_path)
 
-    def queue_generation(input_path: str, prompt: str, noise: float, source: str) -> None:
+    def queue_generation(input_path: str, prompt: str, noise: float, source: str, track: int | None = None) -> None:
         if not Path(input_path).is_file():
             print(f"[{source}] File not found: {input_path}")
             return
@@ -163,7 +169,7 @@ def main() -> None:
         print(f"  Output: {output_path}")
         print()
 
-        job_queue.put((input_path, prompt, noise, output_path))
+        job_queue.put((input_path, prompt, noise, output_path, track))
 
     def make_osc_handler(track):
         def osc_generate_handler(prompt, input_path, noise):
@@ -173,16 +179,18 @@ def main() -> None:
             print(f"  Prompt: {prompt}")
             print(f"  Input:  {input_path}")
             print(f"  Noise:  {noise}")
-            queue_generation(str(input_path), str(prompt), float(noise), f"OSC Track {track}")
+            queue_generation(str(input_path), str(prompt), float(noise), f"OSC Track {track}", track)
         return osc_generate_handler
 
     osc_startup(execthreadscount=0, writethreadscount=0)
     osc_udp_server("0.0.0.0", args.osc_port, "generate_server")
+    osc_udp_client(args.osc_reply_host, args.osc_reply_port, "ready_client")
     for track in range(4):
         osc_method(f"/generate/{track}", make_osc_handler(track))
         
     print(f"OSC listening on 0.0.0.0:{args.osc_port}")
-    print("OSC endpoint: /generate")
+    print("OSC endpoints: /generate/0 through /generate/3")
+    print(f"OSC /ready replies sent to {args.osc_reply_host}:{args.osc_reply_port}")
     print()
     print("Interactive audio transformation mode.")
     print("Type 'q' to quit.")
@@ -196,11 +204,17 @@ def main() -> None:
                 job_queue.task_done()
                 break
 
-            input_path, prompt, noise, output_path = job
+            input_path, prompt, noise, output_path, track = job
 
             try:
                 with generation_lock:
                     generate_audio(model=model, input_path=input_path, prompt=prompt, output_path=output_path, noise=noise, duration=args.duration, steps=args.steps, cfg_scale=args.cfg_scale, seed=args.seed, normalize=args.normalize, max_tail=args.max_tail, tail_silence=args.tail_silence)
+
+                if track is not None:
+                    output_filename = Path(output_path).name
+                    ready_message = oscbuildparse.OSCMessage("/ready", None, [track, output_filename])
+                    osc_send(ready_message, "ready_client")
+                    print(f"Sent OSC: /ready {track} {output_filename}")
             except Exception as e:
                 print()
                 print(f"Generation failed: {e}")
