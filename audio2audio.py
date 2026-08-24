@@ -13,6 +13,35 @@ from osc4py3 import oscbuildparse
 from osc4py3 import oscmethod as osm
 
 
+def trim_leading_silence(audio: torch.Tensor, sample_rate: int, threshold_db: float = -50.0, pre_roll: float = 0.005) -> tuple[torch.Tensor, float]:
+    """Trim silence before the first sustained audible short-window RMS level."""
+
+    frame_samples = max(1, round(0.01 * sample_rate))
+    hop_samples = max(1, round(0.001 * sample_rate))
+    hold_frames = max(1, round(0.02 * sample_rate / hop_samples))
+
+    if audio.shape[-1] < frame_samples:
+        return audio, 0.0
+
+    energy = audio.square().mean(dim=0, keepdim=True).unsqueeze(0)
+    frame_rms = F.avg_pool1d(energy, frame_samples, stride=hop_samples).sqrt().flatten()
+    threshold = 10 ** (threshold_db / 20.0)
+    audible = (frame_rms >= threshold).float().view(1, 1, -1)
+
+    if audible.shape[-1] < hold_frames:
+        return audio, 0.0
+
+    sustained = F.avg_pool1d(audible, hold_frames, stride=1).flatten() >= 1.0
+    audible_frames = sustained.nonzero(as_tuple=False)
+
+    if audible_frames.numel() == 0:
+        return audio, 0.0
+
+    onset_sample = audible_frames[0].item() * hop_samples
+    trim_sample = max(0, onset_sample - round(pre_roll * sample_rate))
+    return audio[:, trim_sample:], trim_sample / sample_rate
+
+
 def generate_audio(model, input_path: str, prompt: str, output_path: str, noise: float = 0.4, duration: float | None = None, steps: int = 8, cfg_scale: float = 1.0, seed: int = -1, normalize: bool = False, max_tail: float = 2.0, tail_silence: float = 0.1):
     """Generate a transformed audio sample."""
 
@@ -75,6 +104,11 @@ def generate_audio(model, input_path: str, prompt: str, output_path: str, noise:
             print(f"Retained {tail_duration:.2f}s of generated tail.")
     else:
         out = generated[:, :output_samples]
+
+    out, trimmed_duration = trim_leading_silence(out, model.model.sample_rate)
+
+    if trimmed_duration > 0:
+        print(f"Trimmed {trimmed_duration:.3f}s of leading silence.")
 
     clipped = (out.abs() >= 0.999).float().mean().item()
 
